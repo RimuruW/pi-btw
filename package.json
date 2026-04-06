@@ -1,6 +1,6 @@
 {
   "name": "@linioi/pi-btw",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Side-question extension for pi. Ask one-off questions during agent work without derailing the main session.",
   "type": "module",
   "author": "RimuruW",
