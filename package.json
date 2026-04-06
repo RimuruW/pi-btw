@@ -1,0 +1,48 @@
+{
+  "name": "@linioi/pi-btw",
+  "version": "0.1.0",
+  "description": "Side-question extension for pi. Ask one-off questions during agent work without derailing the main session.",
+  "type": "module",
+  "author": "RimuruW",
+  "license": "MIT",
+  "keywords": [
+    "pi-extension",
+    "pi-coding-agent",
+    "side-question",
+    "llm",
+    "ai-assistant"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RimuruW/pi-btw.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RimuruW/pi-btw/issues"
+  },
+  "homepage": "https://github.com/RimuruW/pi-btw#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "index.ts",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "scripts": {
+    "clean": "echo 'nothing to clean'",
+    "build": "echo 'No build step required: pi loads TypeScript extensions directly'",
+    "check": "node --experimental-strip-types --test tests/*.test.ts",
+    "prepack": "npm run check"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
