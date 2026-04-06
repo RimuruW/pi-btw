@@ -8,12 +8,12 @@ import {
 import {
 	convertToLlm,
 	getMarkdownTheme,
+	DynamicBorder,
 	type ExtensionAPI,
 	type ExtensionCommandContext,
+	type Theme,
 } from "@mariozechner/pi-coding-agent";
-import { Container, Markdown, Text, type TUI } from "@mariozechner/pi-tui";
-import { Loader } from "@mariozechner/pi-tui/dist/components/loader.js";
-import type { Theme } from "@mariozechner/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+import { Container, Loader, Markdown, Spacer, Text, type TUI } from "@mariozechner/pi-tui";
 
 // ---------------------------------------------------------------------------
 // Command constants
@@ -131,7 +131,19 @@ async function streamBtwQuestion(options: {
 	onTextDelta?: (text: string) => void;
 }): Promise<{ answer: string | null; errorHint?: string }> {
 	const { model, apiKey, headers, thinkingLevel, messages, question, signal, onTextDelta } = options;
-	const llmMessages = convertToLlm(messages);
+	const llmMessages = convertToLlm(messages)
+		// streamSimple has no tools — strip tool calls / results so the provider
+		// doesn't send an empty `tools: []` array that some APIs reject (400).
+		.map((m) => {
+			if (m.role === "assistant") {
+				const content = m.content.filter((b) => b.type !== "toolCall");
+				if (content.length === 0) return null;
+				return { ...m, content };
+			}
+			if ((m as { role: string }).role === "toolResult") return null;
+			return m;
+		})
+		.filter((m): m is NonNullable<typeof m> => m !== null);
 	const questionMessage: Message = {
 		role: "user",
 		content: [{ type: "text", text: question }],
@@ -184,7 +196,7 @@ async function streamBtwQuestion(options: {
 // Streaming UI component
 // ---------------------------------------------------------------------------
 
-/** Shows a spinner → streams text as it arrives → renders final Markdown. */
+/** Shows a bordered spinner → streams Markdown inside the same border. */
 class StreamingBtwView extends Container {
 	private tui: TUI;
 	private theme: Theme;
@@ -199,15 +211,25 @@ class StreamingBtwView extends Container {
 		super();
 		this.tui = tui;
 		this.theme = theme;
-		this.loader = new Loader(tui, theme.loaderColor, theme.loaderMessageColor, `BTW: ${modelId} (${thinkingLevel})`);
-		this.loader.start();
+		const borderColor = (s: string) => theme.fg("border", s);
+		this.addChild(new DynamicBorder(borderColor));
+		this.loader = new Loader(tui, (s) => theme.fg("accent", s), (s) => theme.fg("muted", s), `BTW: ${modelId} (${thinkingLevel})`);
+		this.addChild(this.loader);
+		this.addChild(new DynamicBorder(borderColor));
 	}
 
 	/** Accumulate a streaming text delta and trigger re-render. */
 	onTextDelta(delta: string): void {
 		this.fullText += delta;
 		this.loader.stop();
-		this.mdComponent = new Markdown(this.fullText, 0, 0, getMarkdownTheme(this.theme));
+		this.children = [];
+		const borderColor = (s: string) => this.theme.fg("border", s);
+		this.addChild(new DynamicBorder(borderColor));
+		this.addChild(new Spacer(1));
+		this.mdComponent = new Markdown(this.fullText, 0, 0, getMarkdownTheme());
+		this.addChild(this.mdComponent);
+		this.addChild(new Spacer(1));
+		this.addChild(new DynamicBorder(borderColor));
 		this.tui.render();
 	}
 
@@ -215,10 +237,16 @@ class StreamingBtwView extends Container {
 	markComplete(): void {
 		if (this.settled) return;
 		this.settled = true;
+		if (!this.fullText) return;
 		this.loader.stop();
-		if (this.fullText) {
-			this.mdComponent = new Markdown(this.fullText, 0, 0, getMarkdownTheme(this.theme));
-		}
+		this.children = [];
+		const borderColor = (s: string) => this.theme.fg("border", s);
+		this.addChild(new DynamicBorder(borderColor));
+		this.addChild(new Spacer(1));
+		this.mdComponent = new Markdown(this.fullText, 0, 0, getMarkdownTheme());
+		this.addChild(this.mdComponent);
+		this.addChild(new Spacer(1));
+		this.addChild(new DynamicBorder(borderColor));
 		this.tui.render();
 	}
 
@@ -227,7 +255,14 @@ class StreamingBtwView extends Container {
 		if (this.settled) return;
 		this.settled = true;
 		this.loader.stop();
-		this.errorText = new Text(message, 0, 0);
+		this.children = [];
+		const borderColor = (s: string) => this.theme.fg("border", s);
+		this.addChild(new DynamicBorder(borderColor));
+		this.addChild(new Spacer(1));
+		this.errorText = new Text(this.theme.fg("error", `✗ ${message}`), 0, 0);
+		this.addChild(this.errorText);
+		this.addChild(new Spacer(1));
+		this.addChild(new DynamicBorder(borderColor));
 		this.tui.render();
 	}
 
@@ -244,9 +279,11 @@ class StreamingBtwView extends Container {
 	}
 
 	render(width: number): string[] {
-		if (this.errorText) return this.errorText.render(width);
-		if (this.mdComponent) return this.mdComponent.render(width);
-		return this.loader.render(width);
+		const lines: string[] = [];
+		for (const child of this.children) {
+			lines.push(...child.render(width));
+		}
+		return lines;
 	}
 }
 
